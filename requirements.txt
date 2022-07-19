@@ -1,0 +1,4 @@
+# --find-links https://download.pytorch.org/whl/torch_stable.html
+torch==1.12.0+cu113; sys_platform=="linux"
+torch==1.12.0; sys_platform=="darwin"
+numpy

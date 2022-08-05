@@ -7,6 +7,7 @@ import time
 from collections import defaultdict
 
 import torch
+import torch.nn.functional as F
 from torch.utils.data.dataloader import DataLoader
 from mingpt.utils import CfgNode as CN
 
@@ -26,13 +27,18 @@ class Trainer:
         C.betas = (0.9, 0.95)
         C.weight_decay = 0.1 # only applied on matmul weights
         C.grad_norm_clip = 1.0
+        C.temperature = 2.0
+        C.alpha_distil = 0.1
+        C.alpha_ce = 0.9
         return C
 
-    def __init__(self, config, model, train_dataset):
+    def __init__(self, config, model, train_dataset, **kwargs):
         self.config = config
         self.model = model
         self.train_dataset = train_dataset
         self.callbacks = defaultdict(list)
+        self.teacher = kwargs.pop("teacher_model", None)
+        
 
         # determine the device we'll train on
         if config.device == 'auto':
@@ -41,6 +47,7 @@ class Trainer:
             self.device = config.device
         self.model = self.model.to(self.device)
         print("running on device", self.device)
+        # self.tea_loss = torch.tensor(0).to(self.device)
 
         # variables that will be assigned to trainer class later for logging and etc
         self.iter_num = 0
@@ -90,6 +97,21 @@ class Trainer:
 
             # forward the model
             logits, self.loss = model(x, y)
+
+            if self.teacher is not None:
+                with torch.no_grad():
+                    outputs_tea = self.teacher(x)
+                    logits_tea = outputs_tea.logits
+
+                soft_logits = F.kl_div(
+                        input=F.log_softmax(logits / config.temperature, dim=-1),
+                        target=F.softmax(logits_tea / config.temperature, dim=-1),
+                        reduction="batchmean",
+                    ) * (config.temperature ** 2)                    
+                
+                # self.tea_loss = soft_logits
+                self.loss = config.alpha_distil * soft_logits + config.alpha_ce * self.loss
+
 
             # backprop and update the parameters
             model.zero_grad(set_to_none=True)

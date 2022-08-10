@@ -2,12 +2,13 @@
 Simple training loop; Boilerplate that could apply to any arbitrary neural network,
 so nothing in this file really has anything to do with GPT specifically.
 """
-
+import math
 import time
 from collections import defaultdict
 
 import torch
 import torch.nn.functional as F
+from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data.dataloader import DataLoader
 from mingpt.utils import CfgNode as CN
 
@@ -28,8 +29,8 @@ class Trainer:
         C.weight_decay = 0.1 # only applied on matmul weights
         C.grad_norm_clip = 1.0
         C.temperature = 2.0
-        C.alpha_distil = 0.1
-        C.alpha_ce = 0.9
+        C.alpha_distil = 0.99
+        # C.alpha_ce = 0.9
         return C
 
     def __init__(self, config, model, train_dataset, **kwargs):
@@ -45,6 +46,10 @@ class Trainer:
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         else:
             self.device = config.device
+
+        if self.teacher:
+            self.teacher = self.teacher.to(self.device)
+    
         self.model = self.model.to(self.device)
         print("running on device", self.device)
         # self.tea_loss = torch.tensor(0).to(self.device)
@@ -64,8 +69,14 @@ class Trainer:
         for callback in self.callbacks.get(onevent, []):
             callback(self)
 
+    @staticmethod
+    def _update_alpha_(alpha, iter_num, max_iters):
+        alpha = (iter_num - 0) / (max_iters - 0) * (alpha - (1 - alpha)) + (1 - alpha)
+        return alpha
+
     def run(self):
         model, config = self.model, self.config
+        scaler = GradScaler()
 
         # setup the optimizer
         self.optimizer = model.configure_optimizers(config)
@@ -84,7 +95,13 @@ class Trainer:
         self.iter_num = 0
         self.iter_time = time.time()
         data_iter = iter(train_loader)
+
         while True:
+
+            updated_alpha_ce = self._update_alpha_(config.alpha_distil, self.iter_num, config.max_iters)
+            updated_alpha_distil = 1 - updated_alpha_ce
+            if self.iter_num % 1000 == 0:
+                print(self.iter_num, config.max_iters, updated_alpha_distil, updated_alpha_ce)
 
             # fetch the next batch (x, y) and re-init iterator if needed
             try:
@@ -95,29 +112,31 @@ class Trainer:
             batch = [t.to(self.device) for t in batch]
             x, y = batch
 
+            with autocast():
             # forward the model
-            logits, self.loss = model(x, y)
+                logits, self.loss = model(x, y)
 
-            if self.teacher is not None:
-                with torch.no_grad():
-                    outputs_tea = self.teacher(x)
-                    logits_tea = outputs_tea.logits
+                if self.teacher is not None:
+                    with torch.no_grad():
+                        outputs_tea = self.teacher(x)
+                        logits_tea = outputs_tea.logits
 
-                soft_logits = F.kl_div(
-                        input=F.log_softmax(logits / config.temperature, dim=-1),
-                        target=F.softmax(logits_tea / config.temperature, dim=-1),
-                        reduction="batchmean",
-                    ) * (config.temperature ** 2)                    
-                
-                # self.tea_loss = soft_logits
-                self.loss = config.alpha_distil * soft_logits + config.alpha_ce * self.loss
+                    soft_logits = F.kl_div(
+                            input=F.log_softmax(logits / config.temperature, dim=-1),
+                            target=F.softmax(logits_tea / config.temperature, dim=-1),
+                            reduction="batchmean",
+                        ) * (config.temperature ** 2)                    
+                    
+                    self.tea_loss = soft_logits
+                    self.loss = updated_alpha_distil * soft_logits + updated_alpha_ce * self.loss
 
 
             # backprop and update the parameters
             model.zero_grad(set_to_none=True)
-            self.loss.backward()
+            scaler.scale(self.loss).backward()
+            scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_norm_clip)
-            self.optimizer.step()
+            scaler.step(self.optimizer)
 
             self.trigger_callbacks('on_batch_end')
             self.iter_num += 1
@@ -125,6 +144,9 @@ class Trainer:
             self.iter_dt = tnow - self.iter_time
             self.iter_time = tnow
 
-            # termination conditions
+            scaler.update()
+            # termination conditions    
             if config.max_iters is not None and self.iter_num >= config.max_iters:
                 break
+            
+            

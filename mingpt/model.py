@@ -279,13 +279,40 @@ class GPT(nn.Module):
 
         return logits, loss
 
+    def mask_typical_logits(logits, mass):
+        min_tokens_to_keep = 1,
+        filter_value = -float("Inf")
+
+        # calculate entropy
+        normalized = torch.nn.functional.log_softmax(logits, dim=-1)
+        p = torch.exp(normalized)
+        ent = -(normalized * p).nansum(-1, keepdim=True)
+
+        # shift and sort
+        shifted_logits = torch.abs((-normalized) - ent)
+        sorted_logits, sorted_indices = torch.sort(shifted_logits, descending=False)
+        sorted_logits = logits.gather(-1, sorted_indices)
+        cumulative_probs = sorted_logits.softmax(dim=-1).cumsum(dim=-1)
+
+        # Remove tokens with cumulative mass above the threshold
+        last_ind = (cumulative_probs < mass).sum(dim=1)
+        last_ind[last_ind < 0] = 0
+        sorted_indices_to_remove = sorted_logits > sorted_logits.gather(1, last_ind.view(-1, 1))
+        if min_tokens_to_keep > 1:
+            # Keep at least min_tokens_to_keep (set to min_tokens_to_keep-1 because we add the first one below)
+            sorted_indices_to_remove[..., : min_tokens_to_keep] = 0
+        indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+        logits = logits.masked_fill(indices_to_remove, filter_value)
+        return logits
+
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, do_sample=False, top_k=None):
+    def generate(self, idx, max_new_tokens, temperature=1.0, do_sample=False, top_k=None, typical_p=None):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
+        assert not (top_k is not None and typical_p is not None), "top_k and typical_p can not be set at the same time!"
         token_probs = torch.zeros(max_new_tokens)
         for index in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
@@ -298,6 +325,9 @@ class GPT(nn.Module):
             if top_k is not None:
                 v, _ = torch.topk(logits, top_k)
                 logits[logits < v[:, [-1]]] = -float('Inf')
+            elif typical_p is not None:
+                logits = self.mask_typical_logits(logits, typical_p)
+                
             # apply softmax to convert logits to (normalized) probabilities
             probs = F.softmax(logits, dim=-1)
             # either sample from the distribution or take the most likely element

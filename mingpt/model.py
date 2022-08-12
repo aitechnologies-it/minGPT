@@ -279,8 +279,8 @@ class GPT(nn.Module):
 
         return logits, loss
 
-    def mask_typical_logits(logits, mass):
-        min_tokens_to_keep = 1,
+    def mask_typical_logits(self, logits, mass):
+        min_tokens_to_keep = 1
         filter_value = -float("Inf")
 
         # calculate entropy

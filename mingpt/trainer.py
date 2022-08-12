@@ -113,7 +113,6 @@ class Trainer:
                 batch = next(data_iter)
             batch = [t.to(self.device) for t in batch]
             x, y = batch
-
             # forward the model
             with autocast():
                 logits, self.loss = model(x, y)

@@ -99,7 +99,7 @@ class Trainer:
         while True:
 
             # Schedule alpha_distil for teacher distillation
-            if config.distil_scheduler == "linear":
+            if self.teacher and config.distil_scheduler == "linear":
                 self.iter_alpha_distil = Trainer._compute_linear_schedule(
                     iter_num=self.iter_num, max_iters=config.max_iters,
                     start_value=config.alpha_distil, end_value=1-config.alpha_distil

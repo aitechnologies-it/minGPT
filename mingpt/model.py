@@ -158,7 +158,7 @@ class GPT(nn.Module):
 
         # report number of parameters (note we don't count the decoder parameters in lm_head)
         n_params = sum(p.numel() for p in self.transformer.parameters())
-        print("number of parameters: %.2fM" % (n_params/1e6,))
+        # print("number of parameters: %.2fM" % (n_params/1e6,))
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -306,7 +306,7 @@ class GPT(nn.Module):
         return logits
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, do_sample=False, top_k=None, typical_p=None):
+    def generate(self, idx, max_new_tokens, temperature=1.0, do_sample=False, top_k=None, typical_p=None, eos_token_idx=None):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
@@ -336,7 +336,9 @@ class GPT(nn.Module):
             else:
                 _, idx_next = torch.topk(probs, k=1, dim=-1)
             # append sampled index to the running sequence and continue
-            idx = torch.cat((idx, idx_next), dim=1)
-            token_probs[index] = probs.flatten()[idx_next.flatten()]
-
-        return idx, token_probs
+            if idx_next.item() != eos_token_idx:
+                idx = torch.cat((idx, idx_next), dim=1)
+                token_probs[index] = probs.flatten()[idx_next.flatten()]
+            else:
+                break
+        return idx, token_probs[:idx.shape[1]]

@@ -313,7 +313,8 @@ class GPT(nn.Module):
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
         assert not (top_k is not None and typical_p is not None), "top_k and typical_p can not be set at the same time!"
-        token_probs = torch.zeros(max_new_tokens)
+        # token_probs = torch.zeros(max_new_tokens)
+        token_probs = []
         for index in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = idx if idx.size(1) <= self.block_size else idx[:, -self.block_size:]
@@ -338,7 +339,9 @@ class GPT(nn.Module):
             # append sampled index to the running sequence and continue
             if idx_next.item() != eos_token_idx:
                 idx = torch.cat((idx, idx_next), dim=1)
-                token_probs[index] = probs.flatten()[idx_next.flatten()]
+                token_probs.append(probs.flatten()[idx_next.flatten()].item())
+                # token_probs[index] = probs.flatten()[idx_next.flatten()]
             else:
                 break
-        return idx, token_probs[:idx.shape[1]]
+    
+        return idx, torch.tensor(token_probs)

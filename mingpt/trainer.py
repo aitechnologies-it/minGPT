@@ -6,8 +6,6 @@ import time
 from collections import defaultdict
 
 import torch
-import torch.nn.functional as F
-from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data.dataloader import DataLoader
 
 from mingpt.utils import CfgNode as CN
@@ -146,15 +144,14 @@ class Trainer:
                 
                 self.optimizer.step()
 
+                if privacy:
+                    self.dp_eps = privacy_engine.get_epsilon(self.dp_delta)
+
                 self.trigger_callbacks('on_batch_end')
                 self.iter_num += 1
                 tnow = time.time()
                 self.iter_dt = tnow - self.iter_time
                 self.iter_time = tnow
-
-                if privacy:
-                    self.dp_eps = privacy_engine.get_epsilon(self.dp_delta)
-                    # print(f"[diffpriv] ɛ: {eps:.2f}")
 
             # termination conditions
             if config.max_iters is not None and self.iter_num >= config.max_iters:

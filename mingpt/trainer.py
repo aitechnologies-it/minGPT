@@ -101,9 +101,8 @@ class Trainer:
         )
 
         if privacy:
-            self.dp_delta = 1 / len(train_loader) # Parameter for privacy accounting. Probability of not achieving privacy guarantees
-            self.dp_eps = privacy_engine.get_epsilon(self.dp_delta)
             privacy_engine = PrivacyEngine()
+            self.dp_delta = 1 / len(train_loader) # Parameter for privacy accounting. Probability of not achieving privacy guarantees
             model, self.optimizer, train_loader = privacy_engine.make_private(
                 module=model,
                 optimizer=self.optimizer,
@@ -112,6 +111,7 @@ class Trainer:
                 max_grad_norm=config.dp_max_grad_norm,
                 poisson_sampling=False,
             )
+            self.dp_eps = privacy_engine.get_epsilon(self.dp_delta)
             print(f"Differential Privacy active. Using sigma={self.optimizer.noise_multiplier} and C={config.dp_max_grad_norm}")
 
         model.train()

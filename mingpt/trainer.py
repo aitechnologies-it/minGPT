@@ -85,7 +85,7 @@ class Trainer:
         sampler = None
         if not privacy:
             sampler = torch.utils.data.RandomSampler(
-                self.train_dataset, replacement=True, num_samples=int(1e10)
+                self.train_dataset, replacement=False
             )
 
         # setup the dataloader

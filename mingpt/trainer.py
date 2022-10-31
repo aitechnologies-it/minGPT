@@ -114,9 +114,8 @@ class Trainer:
 
         model.train()
         self.iter_num = 0
-        self.iter_time = time.time()
-        # data_iter = iter(train_loader)
         while True:
+            self.iter_time = time.time()
             for batch in train_loader:
                 x, y = batch
                 x = x.to(self.device)
@@ -150,7 +149,7 @@ class Trainer:
                 self.trigger_callbacks('on_batch_end')
                 self.iter_num += 1
                 tnow = time.time()
-                self.iter_dt = tnow - self.iter_time
+                self.iter_dt = self.iter_dt*0.1 + (tnow - self.iter_time)*0.9
                 self.iter_time = tnow
 
             # termination conditions

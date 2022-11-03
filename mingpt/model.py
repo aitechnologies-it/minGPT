@@ -133,12 +133,16 @@ class GPT(nn.Module):
                 'gpt2-large':   dict(n_layer=36, n_head=20, n_embd=1280), # 774M params
                 'gpt2-xl':      dict(n_layer=48, n_head=25, n_embd=1600), # 1558M params
                 # Gophers
-                'gopher-44m':   dict(n_layer=8, n_head=16, n_embd=512),
+                'gopher-44m':   dict(n_layer=8, n_head=16, n_embd=512), # 74M
                 # (there are a number more...)
+                # made by ait
+                'otter-large':  dict(n_layer=10, n_head=10, n_embd=512), # 57M
+                'otter':        dict(n_layer=10, n_head=10, n_embd=384), # 43M
+                'otter-mini':   dict(n_layer=8, n_head=8, n_embd=384), # 28M
                 # I made these tiny models up
-                'gpt-mini':     dict(n_layer=6, n_head=6, n_embd=192),
-                'gpt-micro':    dict(n_layer=4, n_head=4, n_embd=128),
-                'gpt-nano':     dict(n_layer=3, n_head=3, n_embd=48),
+                'gpt-mini':     dict(n_layer=6, n_head=6, n_embd=192), # 7.8M
+                'gpt-micro':    dict(n_layer=4, n_head=4, n_embd=128), # 2.3M
+                'gpt-nano':     dict(n_layer=3, n_head=3, n_embd=48), # 0.5M
             }[config.model_type])
 
         self.transformer = nn.ModuleDict(dict(

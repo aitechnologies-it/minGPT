@@ -136,8 +136,7 @@ class GPT(nn.Module):
                 'gopher-44m':   dict(n_layer=8, n_head=16, n_embd=512), # 74M
                 # (there are a number more...)
                 # made by ait
-                'otter-large':  dict(n_layer=10, n_head=10, n_embd=512), # 57M
-                'otter':        dict(n_layer=10, n_head=10, n_embd=384), # 43M
+                'otter':        dict(n_layer=8, n_head=8, n_embd=512), # 37M
                 'otter-mini':   dict(n_layer=8, n_head=8, n_embd=384), # 28M
                 # I made these tiny models up
                 'gpt-mini':     dict(n_layer=6, n_head=6, n_embd=192), # 7.8M

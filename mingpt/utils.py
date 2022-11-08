@@ -4,6 +4,7 @@ import sys
 import json
 import random
 from ast import literal_eval
+from typing import Union
 
 import numpy as np
 import torch
@@ -101,3 +102,14 @@ class CfgNode:
             # overwrite the attribute
             print("command line overwriting config attribute %s with %s" % (key, val))
             setattr(obj, leaf_key, val)
+
+def device_from(config_or_str: Union[CfgNode, str]):
+    if isinstance(config_or_str, CfgNode):
+        device = config_or_str.device
+    else:
+        device = config_or_str
+
+    if device == 'auto':
+        return 'cuda' if torch.cuda.is_available() else 'cpu'
+    else:
+        return device

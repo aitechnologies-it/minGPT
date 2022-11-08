@@ -9,6 +9,7 @@ import torch
 from torch.utils.data.dataloader import DataLoader
 
 from mingpt.utils import CfgNode as CN
+from mingpt.utils import device_from
 
 from opacus import PrivacyEngine
 
@@ -45,16 +46,13 @@ class Trainer:
         self.iter_alpha_distil = config.alpha_distil
 
         # determine the device we'll train on
-        if config.device == 'auto':
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        else:
-            self.device = config.device
+        self.device = device_from(config)
 
         if self.teacher:
             self.teacher = self.teacher.to(self.device)
     
         self.model = self.model.to(self.device)
-        print("running on device", self.device)
+        print("Trainer.__init__(): running on device", self.device)
         # self.tea_loss = torch.tensor(0).to(self.device)
 
         # variables that will be assigned to trainer class later for logging and etc

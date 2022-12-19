@@ -134,10 +134,11 @@ class GPT(nn.Module):
                 'gpt2-xl':      dict(n_layer=48, n_head=25, n_embd=1600), # 1558M params
                 # Gophers
                 'gopher-44m':   dict(n_layer=8, n_head=16, n_embd=512), # 74M
+                'gopher-22m':   dict(n_layer=4, n_head=16, n_embd=512), # 37M
                 # (there are a number more...)
                 # made by ait
-                'otter':        dict(n_layer=8, n_head=8, n_embd=512), # 37M
-                'otter-mini':   dict(n_layer=8, n_head=8, n_embd=384), # 28M
+                'otter':        dict(n_layer=8, n_head=8, n_embd=384),
+                'otter-mini':   dict(n_layer=6, n_head=6, n_embd=384),
                 # I made these tiny models up
                 'gpt-mini':     dict(n_layer=6, n_head=6, n_embd=192), # 7.8M
                 'gpt-micro':    dict(n_layer=4, n_head=4, n_embd=128), # 2.3M

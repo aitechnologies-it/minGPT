@@ -147,7 +147,7 @@ class Trainer:
                 self.trigger_callbacks('on_batch_end')
                 self.iter_num += 1
                 tnow = time.time()
-                self.iter_dt = self.iter_dt*0.1 + (tnow - self.iter_time)*0.9
+                self.iter_dt = self.iter_dt*0.5 + (tnow - self.iter_time)*0.5
                 self.iter_time = tnow
 
             # termination conditions

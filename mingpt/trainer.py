@@ -30,7 +30,7 @@ class Trainer:
         C.temperature = 2.0
         return C
 
-    def __init__(self, config, model, train_dataset, **kwargs):
+    def __init__(self, config, model, train_dataset, compile=False, **kwargs):
         self.config = config
         self.model = model
         self.train_dataset = train_dataset
@@ -38,9 +38,12 @@ class Trainer:
 
         # determine the device we'll train on
         self.device = device_from(config)
-
         self.model = self.model.to(self.device)
         print("Trainer.__init__(): running on device", self.device)
+
+        if compile:
+            print("Trainer.__init__(): compiling model with torch.compile()")
+            self.model = torch.compile(self.model)
 
         # variables that will be assigned to trainer class later for logging and etc
         self.iter_num = 0

@@ -7,6 +7,7 @@ from collections import defaultdict
 
 import torch
 from torch.utils.data.dataloader import DataLoader
+from torch.cuda.amp import autocast, GradScaler
 
 from mingpt.utils import CfgNode as CN
 from mingpt.utils import device_from
@@ -70,6 +71,7 @@ class Trainer:
 
     def run(self):
         model, config = self.model, self.config
+        scaler = GradScaler()
 
         # setup the optimizer
         self.optimizer = model.configure_optimizers(config)
@@ -106,17 +108,16 @@ class Trainer:
                 # x, y = batch
 
                 # forward the model
-                logits, self.loss = model(x, y)
+                with autocast():
+                    logits, self.loss = model(x, y)
 
                 # backprop and update the parameters
-                # model.zero_grad(set_to_none=True)
-                model.zero_grad()
-                self.optimizer.zero_grad()
-                self.loss.backward()
-
+                model.zero_grad(set_to_none=True)
+                scaler.scale(self.loss).backward()
+                scaler.unscale_(self.optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_norm_clip)
-                
-                self.optimizer.step()
+                scaler.step(self.optimizer)
+                scaler.update()
 
                 self.trigger_callbacks('on_batch_end')
                 self.iter_num += 1

@@ -30,7 +30,7 @@ class Trainer:
         C.temperature = 2.0
         return C
 
-    def __init__(self, config, model, train_dataset, compile=False, **kwargs):
+    def __init__(self, config, model, train_dataset, compile=False, use_tf32=False, **kwargs):
         self.config = config
         self.model = model
         self.train_dataset = train_dataset
@@ -44,6 +44,10 @@ class Trainer:
         if compile:
             print("Trainer.__init__(): compiling model with torch.compile()")
             self.model = torch.compile(self.model)
+            if use_tf32 and self.device == "cuda":
+                print("Trainer.__init__(): Lowering matmul precision to 'high' on gpu for higher performance. " +
+                    "See: https://github.com/Lightning-AI/lightning/issues/12997")
+                torch.set_float32_matmul_precision('high')
 
         # variables that will be assigned to trainer class later for logging and etc
         self.iter_num = 0

@@ -12,6 +12,11 @@ from torch.cuda.amp import autocast, GradScaler
 from mingpt.utils import CfgNode as CN
 from mingpt.utils import device_from
 
+try:
+    from opacus import PrivacyEngine
+except:
+    print("mingpt/trainer.py: WARNING: could not import opacus. It will be a problem when enabling differential privacy")
+
 class Trainer:
 
     @staticmethod
@@ -29,23 +34,36 @@ class Trainer:
         C.weight_decay = 0.1 # only applied on matmul weights
         C.grad_norm_clip = 1.0
         C.temperature = 2.0
+        # teacher distillation parameters
+        C.distil_scheduler = "linear" # "no": disabled; "linear": schedule it from provided value to 1-x
+        C.alpha_distil = 0.99 # weight assigned to teacher loss; use 1-x for regular ce loss
+        C.dp_noise_multiplier = 1.1 # differential privacy noise mult.
+        C.dp_max_grad_norm = 1.0 # differential privacy norm
+        # Optimizations
+        C.compile = False
+        C.use_amp = False
+        C.use_tf32 = False
         return C
 
-    def __init__(self, config, model, train_dataset, compile=False, use_tf32=False, **kwargs):
+    def __init__(self, config, model, train_dataset**kwargs):
         self.config = config
         self.model = model
         self.train_dataset = train_dataset
         self.callbacks = defaultdict(list)
+        self.teacher = kwargs.pop("teacher_model", None)
+        self.iter_alpha_distil = config.alpha_distil
 
         # determine the device we'll train on
         self.device = device_from(config)
+        if self.teacher:
+            self.teacher = self.teacher.to(self.device)
         self.model = self.model.to(self.device)
         print("Trainer.__init__(): running on device", self.device)
 
-        if compile:
+        if config.compile:
             print("Trainer.__init__(): compiling model with torch.compile()")
             self.model = torch.compile(self.model)
-            if use_tf32 and self.device == "cuda":
+            if config.use_tf32 and self.device == "cuda":
                 print("Trainer.__init__(): Lowering matmul precision to 'high' on gpu for higher performance. " +
                     "See: https://github.com/Lightning-AI/lightning/issues/12997")
                 torch.set_float32_matmul_precision('high')
@@ -69,16 +87,18 @@ class Trainer:
     def _compute_linear_schedule(iter_num, max_iters, start_value, end_value):
         return iter_num / max_iters * (end_value - start_value) + start_value
 
-    def run(self):
+    def run(self, privacy=False):
         model, config = self.model, self.config
         scaler = GradScaler()
 
         # setup the optimizer
         self.optimizer = model.configure_optimizers(config)
 
-        sampler = torch.utils.data.RandomSampler(
-            self.train_dataset, replacement=False
-        )
+        sampler = None
+        if not privacy:
+            sampler = torch.utils.data.RandomSampler(
+                self.train_dataset, replacement=False
+            )
 
         # setup the dataloader
         train_loader = DataLoader(
@@ -89,6 +109,20 @@ class Trainer:
             batch_size=config.batch_size,
             num_workers=config.num_workers,
         )
+
+        if privacy:
+            privacy_engine = PrivacyEngine()
+            self.dp_delta = 1 / len(train_loader) # Parameter for privacy accounting. Probability of not achieving privacy guarantees
+            model, self.optimizer, train_loader = privacy_engine.make_private(
+                module=model,
+                optimizer=self.optimizer,
+                data_loader=train_loader,
+                noise_multiplier=config.dp_noise_multiplier,
+                max_grad_norm=config.dp_max_grad_norm,
+                poisson_sampling=False,
+            )
+            self.dp_eps = privacy_engine.get_epsilon(self.dp_delta)
+            print(f"Differential Privacy active. Using sigma={self.optimizer.noise_multiplier} and C={config.dp_max_grad_norm}")
 
         model.train()
         self.iter_num = 0
@@ -108,16 +142,27 @@ class Trainer:
                 # x, y = batch
 
                 # forward the model
-                with autocast():
+                with autocast(enabled=config.use_amp):
                     logits, self.loss = model(x, y)
 
                 # backprop and update the parameters
-                model.zero_grad(set_to_none=True)
-                scaler.scale(self.loss).backward()
-                scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_norm_clip)
-                scaler.step(self.optimizer)
-                scaler.update()
+                if config.use_amp:
+                    model.zero_grad(set_to_none=True)
+                    scaler.scale(self.loss).backward()
+                    scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_norm_clip)
+                    scaler.step(self.optimizer)
+                    scaler.update()
+                elif privacy:
+                    model.zero_grad()
+                    self.optimizer.zero_grad()
+                    self.loss.backward()
+                    self.optimizer.step()
+                else:
+                    model.zero_grad(set_to_none=True)
+                    self.loss.backward()
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_norm_clip)
+                    self.optimizer.step()
 
                 self.trigger_callbacks('on_batch_end')
                 self.iter_num += 1

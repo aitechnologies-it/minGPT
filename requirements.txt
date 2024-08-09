@@ -1,2 +1,4 @@
 torch==2.2.2
 numpy==1.26.4
+regex==2024.7.24
+requests==2.32.3

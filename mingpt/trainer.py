@@ -45,7 +45,7 @@ class Trainer:
         C.use_tf32 = False
         return C
 
-    def __init__(self, config, model, train_dataset**kwargs):
+    def __init__(self, config, model, train_dataset, **kwargs):
         self.config = config
         self.model = model
         self.train_dataset = train_dataset

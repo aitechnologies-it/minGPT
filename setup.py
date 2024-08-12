@@ -8,7 +8,7 @@ with open('requirements.txt') as f:
 
 setuptools.setup(
     name="mingpt", # Replace with your own username
-    version="1.0.0",
+    version="1.1.0",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/aitechnologies-it/minGPT",

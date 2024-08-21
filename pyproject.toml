@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mingpt"
+authors = [
+    { name = "Diego Giorgini, Luigi Di Sotto", email = "diego.giorgini@aitechnologies.it" }
+]
+description = "A minimal PyTorch re-implementation of the OpenAI GPT (Generative Pretrained Transformer) training"
+version = "1.1.1"
+requires-python = ">=3.7"
+dependencies = [
+    "torch==2.2.2",
+    "numpy==1.26.4",
+    "regex==2024.7.24",
+    "requests==2.32.3",
+]
+dynamic = ["readme"]
+
+[tool.setuptools]
+packages = ["mingpt"]
+
+[tool.setuptools.dynamic]
+readme = {file = ["README.md"], content-type = "text/markdown"}
+
